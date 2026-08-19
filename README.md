@@ -105,6 +105,7 @@ and switch it on in the channel strip.
 | `tests/theme.test.ts` | Theme resolution and the pre-paint boot script, including a corrupt-storage fallback. |
 | `tests/connections.test.ts` | When a platform reconnects and when it must not. |
 | `tests/ui.test.tsx` | Rendering and interaction for the feed, status strip and settings drawer. |
+| `tests/favicon.test.ts` | The icon: that the SVG parses as XML, that its colours are still the ones in `globals.css`, and that the committed `.ico` and `.png` are what the generator produces from it today. |
 
 Adapter payload mapping is deliberately split into pure functions
 (`twitchNotificationToEvent`, `kickEventToStreamEvent`) so the shapes can be tested without
@@ -240,6 +241,31 @@ Theme is dark, light, or system. An inline script in the document head resolves 
 stored theme before first paint, so there's no white flash on load. `data-theme` is always set
 explicitly, which means the stylesheet needs no `prefers-color-scheme` branch.
 
+## The icon
+
+Three short bars in the YouTube, Twitch and Kick channel colours, and one long bar in the amber
+this interface reserves for money: three feeds in, one out. Every value is copied from the tokens
+in `app/globals.css`, and the tests fail if the two drift apart.
+
+`app/icon.svg` is the source of truth. The raster forms are generated from it:
+
+```bash
+node scripts/generate-icons.mjs   # rewrites app/favicon.ico and app/apple-icon.png
+```
+
+Run that after editing the SVG and commit the results. It has no dependencies — the mark is four
+rounded rectangles, which is little enough geometry to rasterize directly, so no image library or
+headless browser is needed. `tests/favicon.test.ts` regenerates both files in memory and compares
+them to what is committed, so forgetting to run it fails the suite rather than shipping a stale
+icon.
+
+Two details that are deliberate rather than oversights. The mark carries its own dark ground
+instead of being transparent, because a favicon sits on browser chrome we don't control and has to
+read the same on a light or a dark tab strip — which is also why it uses the dark-theme hues even
+though the app ships a light palette. And `apple-icon.png` is drawn square rather than rounded,
+because iOS masks the icon into its own shape and pre-rounded corners would show through as
+notches.
+
 ## Setting up a real source
 
 **Twitch** — create an app at [dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps),
@@ -359,6 +385,7 @@ administer — and equally, your own history does not follow you between devices
 ```
 app/
   page.tsx                    the only page — everything runs client-side
+  icon.svg                    the mark; favicon.ico and apple-icon.png are generated from it
 lib/
   types.ts                    StreamEvent + SourceAdapter — the contracts everything meets
   store.ts                    Zustand store, profiles, filtering
@@ -369,6 +396,7 @@ lib/
   useConnections.ts           reconciles live adapters against the active profile
   adapters/                   one file per platform
 components/                   Feed, EventRow, StatusBar, SettingsDrawer
+scripts/                      one-off generators, run by hand and committed
 tests/                        vitest suite
 ```
 
