@@ -1,26 +1,749 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ------------------------------------------------------------------ *
+ * msg-stream — a broadcast triage console.
+ *
+ * The surface is modelled on a mixing desk: each platform is a channel
+ * with its own colour, carried as a rail down the left edge of every
+ * row. Amber (--cash) is reserved exclusively for monetary amounts —
+ * nothing else in the interface uses it, so money is unmistakable at a
+ * glance from across the room.
+ *
+ * Theming: `data-theme` is always set explicitly by the boot script in
+ * lib/theme.ts, which resolves "system" before first paint. So the CSS
+ * never needs a prefers-color-scheme query — one code path, no flash.
+ * ------------------------------------------------------------------ */
+
+:root,
+:root[data-theme="dark"] {
+  --ink: #0e1013;
+  --panel: #16191f;
+  --panel-2: #1e222a;
+  --panel-3: #262b35;
+  --line: #2a2f3a;
+  --text: #e6e9ef;
+  --muted: #8b94a6;
+  --dim: #5d6675;
+  --btn-primary-hover: #ffffff;
+
+  /* The one warm colour. Money only. */
+  --cash: #ffc247;
+  /* How strongly a platform's band colour tints the row. */
+  --band-tint: 16%;
+  --band-tint-hover: 22%;
+  --selection-text: #17130a;
+
+  --danger: #ff8b80;
+  --danger-dot: #ff5c4d;
+  --danger-line: #55302c;
+
+  --link-underline: rgba(230, 233, 239, 0.45);
+
+  --youtube: #ff3b30;
+  --twitch: #a970ff;
+  --kick: #53fc18;
+  --streamlabs: #4a7dff;
+  --streamelements: #ff5fa2;
+  --ceneka: #2ee6c5;
+
+  --rail: 3px;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* Light is its own palette, not an inversion: a warm paper ground keeps
+   the amber legible, and every platform hue is re-picked for contrast
+   against a light surface (Kick's neon green in particular is unreadable
+   on white at its brand value). */
+:root[data-theme="light"] {
+  --ink: #f4f2ee;
+  --panel: #ffffff;
+  --panel-2: #eceae5;
+  --panel-3: #ddd9d2;
+  --line: #dcd8d1;
+  --text: #16181c;
+  --muted: #5d626c;
+  --dim: #8b909a;
+  --btn-primary-hover: #000000;
+
+  --cash: #8a5a00;
+  --band-tint: 20%;
+  --band-tint-hover: 27%;
+  --selection-text: #17130a;
+
+  --danger: #b3261e;
+  --danger-dot: #d93025;
+  --danger-line: #e8c0bc;
+
+  --link-underline: rgba(22, 24, 28, 0.42);
+
+  --youtube: #cc2018;
+  --twitch: #6d31c9;
+  --kick: #2f8f0b;
+  --streamlabs: #2a5bd7;
+  --streamelements: #c2306b;
+  --ceneka: #0a7d6c;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  background: var(--ink);
+  color: var(--text);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-plex-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--cash);
+  color: var(--selection-text);
+}
+
+:focus-visible {
+  outline: 2px solid var(--cash);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* --- console header ------------------------------------------------ */
+
+.wordmark {
+  font-family: var(--font-chivo), sans-serif;
+  font-weight: 900;
+  font-size: 0.94rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.wordmark span {
+  color: var(--dim);
+}
+
+.eyebrow {
+  font-family: var(--font-chivo), sans-serif;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* --- channel LEDs --------------------------------------------------- */
+
+.led-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.led {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--panel);
+  font-family: var(--font-chivo), sans-serif;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--muted);
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+
+.led:hover {
+  border-color: var(--panel-3);
+  color: var(--text);
+}
+
+.led-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dim);
+  flex: none;
+}
+
+.led[data-state="live"] {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--ch) 45%, var(--line));
+}
+
+.led[data-state="live"] .led-dot {
+  background: var(--ch);
+  box-shadow: 0 0 7px var(--ch);
+  animation: pulse 2.4s ease-in-out infinite;
+}
+
+.led[data-state="connecting"] .led-dot {
+  background: var(--ch);
+  opacity: 0.5;
+  animation: pulse 0.7s ease-in-out infinite;
+}
+
+.led[data-state="error"] {
+  color: var(--danger);
+  border-color: var(--danger-line);
+}
+.led[data-state="error"] .led-dot {
+  background: var(--danger-dot);
+}
+
+.led[data-state="unavailable"] {
+  opacity: 0.45;
+  cursor: default;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* --- filter rail ---------------------------------------------------- */
+
+.chip {
+  font-family: var(--font-chivo), sans-serif;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  padding: 6px 11px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.chip:hover {
+  color: var(--text);
+  border-color: var(--panel-3);
+}
+
+.chip[aria-pressed="true"] {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--ink);
+}
+
+.counter {
+  font-family: var(--font-plex-mono), monospace;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.counter b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.counter .cash {
+  color: var(--cash);
+  font-weight: 600;
+}
+
+/* --- message rows --------------------------------------------------- */
+
+.row {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--rail) 1fr auto;
+  gap: 0 14px;
+  align-items: start;
+  padding: 11px 14px 11px 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  transition: background 120ms ease;
+}
+
+.row:hover {
+  background: var(--panel);
+}
+
+.row-rail {
+  align-self: stretch;
+  background: var(--ch);
+  border-radius: 0 2px 2px 0;
+}
+
+/* Read messages recede: the rail hollows out and the content dims. The row
+   stays in place rather than disappearing, so the feed doesn't jump under
+   the cursor while you're clearing it. */
+.row[data-read="true"] {
+  opacity: 0.42;
+}
+
+.row[data-read="true"] .row-rail {
+  background: transparent;
+  box-shadow: inset 2px 0 0 var(--ch);
+  opacity: 0.5;
+}
+
+/* A paid message is marked by its amount, in the money colour. Rows are only
+   tinted where the platform publishes a colour for the band — YouTube's Super
+   Chat ladder, Twitch's cheermote tiers — so nothing is coloured on our say-so.
+   Both attributes are in the selector because matching on one alone ties with
+   the other rules on this element. */
+.row[data-tip="true"][data-band-bg="true"] {
+  background: color-mix(in srgb, var(--band) var(--band-tint), transparent);
+}
+
+.row[data-tip="true"][data-band-bg="true"]:hover {
+  background: color-mix(in srgb, var(--band) var(--band-tint-hover), transparent);
+}
+
+/* Where a platform publishes a colour, the amount wears it as a solid block —
+   the way those platforms show it themselves. A faint wash cannot separate
+   adjacent bands over a dark ground; a solid one is unmistakable. */
+.row[data-banded="true"] .amount {
+  background: var(--band);
+  color: var(--band-ink);
+  padding: 2px 7px;
+  border-radius: 3px;
+}
+
+.row-head {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  flex-wrap: wrap;
+  margin-bottom: 3px;
+}
+
+.row-platform {
+  font-family: var(--font-chivo), sans-serif;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ch);
+  flex: none;
+}
+
+/* The compact form: a filled badge in the channel colour, using the page ground
+   for the letters so it reads in both themes without a second token. */
+.row-mark {
+  flex: none;
+  font-family: var(--font-chivo), sans-serif;
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  padding: 4px 5px;
+  border-radius: 3px;
+  background: var(--ch);
+  color: var(--ink);
+  align-self: center;
+}
+
+.row[data-read="true"] .row-mark {
+  opacity: 0.85;
+}
+
+.row-author {
+  font-family: var(--font-chivo), sans-serif;
+  font-weight: 700;
+  font-size: 0.87rem;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.row-time {
+  font-family: var(--font-plex-mono), monospace;
+  font-size: 0.68rem;
+  color: var(--dim);
+  margin-left: auto;
+  flex: none;
+}
+
+.row-message {
+  font-size: 0.93rem;
+  line-height: 1.45;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+/* Links inherit the message colour rather than introducing a fourth semantic
+   hue — amber stays money, the rails stay platforms. An underline is enough to
+   mark them, since nothing else in the feed is underlined. */
+.msg-link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--link-underline);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: text-decoration-color 120ms ease;
+}
+
+.msg-link:hover {
+  text-decoration-color: currentColor;
+  text-decoration-thickness: 2px;
+}
+
+.amount {
+  font-family: var(--font-plex-mono), monospace;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--cash);
+  letter-spacing: -0.01em;
+  flex: none;
+  /* Centred rather than on the baseline: the banded form is a padded block,
+     and baseline-aligning it drags the whole header line down. */
+  align-self: center;
+}
+
+.kind-tag {
+  font-family: var(--font-chivo), sans-serif;
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dim);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 1px 5px;
+}
+
+/* The read toggle. A physical-feeling switch, sized for a fast click. */
+.readbtn {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1.5px solid var(--panel-3);
+  background: transparent;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  color: transparent;
+  transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
+}
+
+.readbtn:hover {
+  border-color: var(--muted);
+  color: var(--muted);
+}
+
+.readbtn[aria-pressed="true"] {
+  background: var(--panel-3);
+  border-color: var(--panel-3);
+  color: var(--text);
+}
+
+@keyframes slide-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* --- settings ------------------------------------------------------- */
+
+.field {
+  display: block;
+  margin-bottom: 13px;
+}
+
+.field-label {
+  display: block;
+  font-family: var(--font-chivo), sans-serif;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 5px;
+}
+
+.input,
+.select {
+  width: 100%;
+  background: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 8px 10px;
+  color: var(--text);
+  font-family: var(--font-plex-mono), monospace;
+  font-size: 0.82rem;
+}
+
+.input::placeholder {
+  color: var(--dim);
+}
+
+.input:focus,
+.select:focus {
+  border-color: var(--panel-3);
+}
+
+/* The reveal control sits with the field rather than inside it, so it can never
+   be mistaken for part of the value being typed. */
+.secret {
+  display: block;
+}
+
+.secret-toggle {
+  margin-top: 5px;
+  font-family: var(--font-chivo), sans-serif;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+
+.secret-toggle:hover {
+  color: var(--text);
+  border-color: var(--panel-3);
+}
+
+.secret-toggle[aria-pressed="true"] {
+  color: var(--cash);
+  border-color: var(--cash);
+}
+
+.hint {
+  font-size: 0.74rem;
+  line-height: 1.5;
+  color: var(--muted);
+  margin-top: 5px;
+}
+
+.hint a {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.panel-card {
+  border: 1px solid var(--line);
+  border-left: var(--rail) solid var(--ch, var(--line));
+  border-radius: 0 4px 4px 0;
+  background: var(--panel);
+  padding: 15px 16px;
+  margin-bottom: 12px;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.panel-title {
+  font-family: var(--font-chivo), sans-serif;
+  font-weight: 800;
+  font-size: 0.78rem;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+/* Segmented control for language and theme. */
+.segment {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.segment button {
+  font-family: var(--font-chivo), sans-serif;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  padding: 7px 12px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  border: 0;
+  border-right: 1px solid var(--line);
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.segment button:last-child {
+  border-right: 0;
+}
+
+.segment button:hover {
+  color: var(--text);
+}
+
+.segment button[aria-pressed="true"] {
+  background: var(--text);
+  color: var(--ink);
+}
+
+/* Toggle switch */
+.switch {
+  position: relative;
+  width: 38px;
+  height: 21px;
+  border-radius: 11px;
+  background: var(--panel-3);
+  border: 1px solid var(--line);
+  cursor: pointer;
+  flex: none;
+  transition: background 140ms ease;
+}
+
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform 140ms ease, background 140ms ease;
+}
+
+.switch[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--ch) 30%, var(--panel-3));
+  border-color: var(--ch);
+}
+
+.switch[aria-pressed="true"]::after {
+  transform: translateX(17px);
+  background: var(--ch);
+}
+
+.btn {
+  font-family: var(--font-chivo), sans-serif;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  padding: 9px 14px;
+  border-radius: 3px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.btn:hover {
+  background: var(--panel-3);
+}
+
+.btn-primary {
+  background: var(--text);
+  color: var(--ink);
+  border-color: var(--text);
+}
+
+.btn-primary:hover {
+  background: var(--btn-primary-hover);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Profile switcher */
+.profile-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.profile-pick {
+  flex: 1;
+  text-align: left;
+  font-family: var(--font-chivo), sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.profile-pick:hover {
+  color: var(--text);
+  border-color: var(--panel-3);
+}
+
+.profile-pick[aria-current="true"] {
+  background: var(--panel-2);
+  border-color: var(--cash);
+  color: var(--text);
+}
+
+.icon-btn {
+  flex: none;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.72rem;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+
+.icon-btn:hover {
+  color: var(--text);
+  border-color: var(--panel-3);
+}
+
+.icon-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.feed-foot {
+  display: flex;
+  justify-content: center;
+  padding: 20px 16px 32px;
+}
+
+.feed-foot .hint {
+  margin-top: 0;
+}
+
+.empty {
+  text-align: center;
+  padding: 72px 24px;
+  color: var(--muted);
+}
+
+.empty-title {
+  font-family: var(--font-chivo), sans-serif;
+  font-weight: 800;
+  font-size: 0.9rem;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

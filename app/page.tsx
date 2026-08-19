@@ -1,69 +1,173 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
-  return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+import { useMemo, useState } from "react";
+import { Feed } from "@/components/Feed";
+import { StatusBar } from "@/components/StatusBar";
+import { SettingsDrawer } from "@/components/SettingsDrawer";
+import { countUnread, selectActiveProfile, selectVisibleEvents, useStore } from "@/lib/store";
+import { useConnections } from "@/lib/useConnections";
+import { useTheme } from "@/lib/useTheme";
+import { useT } from "@/lib/useT";
+import type { Platform } from "@/lib/types";
+
+export default function Page() {
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  const hydrated = useStore((s) => s.hydrated);
+  const events = useStore((s) => s.events);
+  const readIds = useStore((s) => s.readIds);
+  const statuses = useStore((s) => s.statuses);
+  const filters = useStore((s) => s.filters);
+  const locale = useStore((s) => s.app.locale);
+  const capture = useStore((s) => s.app.capture);
+  const platformDisplay = useStore((s) => s.app.platformDisplay);
+  const bandBackground = useStore((s) => s.app.bandBackground);
+  const profile = useStore(selectActiveProfile);
+  const hasMore = useStore((s) => s.hasMore);
+  const loadingHistory = useStore((s) => s.loadingHistory);
+  const loadOlder = useStore((s) => s.loadOlder);
+  const markRead = useStore((s) => s.markRead);
+  const markAllRead = useStore((s) => s.markAllRead);
+  const setFilters = useStore((s) => s.setFilters);
+  const updateProfile = useStore((s) => s.updateProfile);
+
+  useConnections();
+  useTheme();
+  const t = useT();
+
+  // Taking in paid only means paid only — including chat already in history
+  // from before the setting changed. Otherwise old chat reappears on reload
+  // and contradicts the setting.
+  const paidOnlyCapture = capture === "paid";
+  const effectiveFilters = useMemo(
+    () => (paidOnlyCapture ? { ...filters, tipsOnly: true } : filters),
+    [filters, paidOnlyCapture],
+  );
+
+  const visible = useMemo(
+    () => selectVisibleEvents(events, effectiveFilters, readIds),
+    [events, effectiveFilters, readIds],
+  );
+
+  const unreadCount = useMemo(() => countUnread(events, readIds), [events, readIds]);
+  const unreadTips = useMemo(() => countUnread(events, readIds, true), [events, readIds]);
+
+  const anySourceOn = Object.values(profile.enabled).some(Boolean);
+  const filtering =
+    filters.unreadOnly || filters.tipsOnly || Object.values(filters.platforms).some((v) => !v);
+
+  const toggleSource = (platform: Platform) =>
+    updateProfile({ enabled: { ...profile.enabled, [platform]: !profile.enabled[platform] } });
+
+  // Settings and read state come from localStorage, which is only read after
+  // mount, so the first paint would otherwise disagree with the server HTML.
+  if (!hydrated) {
+    return (
+      <main className="flex flex-1 items-center justify-center">
+        <span className="eyebrow">{t("loading")}</span>
       </main>
-    </div>
+    );
+  }
+
+  return (
+    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col">
+      <header
+        className="sticky top-0 z-20 border-b px-4 py-3 backdrop-blur"
+        style={{
+          background: "color-mix(in srgb, var(--ink) 88%, transparent)",
+          borderColor: "var(--line)",
+        }}
+      >
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h1 className="wordmark">
+            msg<span>·</span>stream
+          </h1>
+          <div className="flex items-center gap-3">
+            <span className="eyebrow" data-testid="active-profile">
+              {profile.name}
+            </span>
+            <button className="btn" onClick={() => setSettingsOpen(true)}>
+              {t("settings")}
+            </button>
+          </div>
+        </div>
+
+        <StatusBar
+          statuses={statuses}
+          enabled={profile.enabled}
+          t={t}
+          onToggle={toggleSource}
+        />
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="counter">
+            <b>{unreadCount}</b> {t("unread")}
+            {/* With paid-only capture every message is paid, so a count of them
+                would just repeat the number to its left. Naming the mode instead
+                explains why no chat is arriving. */}
+            {paidOnlyCapture ? (
+              <>
+                {" · "}
+                <span className="cash">{t("capturePaid")}</span>
+              </>
+            ) : (
+              unreadTips > 0 && (
+                <>
+                  {" · "}
+                  <span className="cash">
+                    {unreadTips} {t("paid")}
+                  </span>
+                </>
+              )
+            )}
+          </span>
+
+          <div className="ml-auto flex flex-wrap gap-2">
+            <button
+              className="chip"
+              aria-pressed={filters.unreadOnly}
+              onClick={() => setFilters({ unreadOnly: !filters.unreadOnly })}
+            >
+              {t("unreadOnly")}
+            </button>
+            {/* A dead control is worse than none: with paid-only capture there
+                is nothing for this to filter out. */}
+            {!paidOnlyCapture && (
+              <button
+                className="chip"
+                aria-pressed={filters.tipsOnly}
+                onClick={() => setFilters({ tipsOnly: !filters.tipsOnly })}
+              >
+                {t("paidOnly")}
+              </button>
+            )}
+            <button className="chip" onClick={markAllRead} disabled={unreadCount === 0}>
+              {t("markAllRead")}
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <Feed
+        events={visible}
+        readIds={readIds}
+        locale={locale}
+        platformDisplay={platformDisplay}
+        bandBackground={bandBackground}
+        t={t}
+        onToggleRead={markRead}
+        anySourceOn={anySourceOn}
+        filtered={filtering}
+        hasMore={hasMore}
+        loadingHistory={loadingHistory}
+        onLoadOlder={() => void loadOlder()}
+      />
+
+      <SettingsDrawer
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        statuses={statuses}
+      />
+    </main>
   );
 }
