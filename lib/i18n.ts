@@ -192,11 +192,11 @@ const en = {
   ytUnreachable: "Could not reach YouTube.",
   ytReading: "Reading live chat",
   ytResumed: "Resumed where it left off",
-  ytQuota: "Daily YouTube API quota used up. It resets at midnight Pacific time.",
+  ytQuota: "Daily YouTube API quota used up — stopped polling. It resets at midnight Pacific time.",
   ytRateLimited: "YouTube is rate limiting this key. Slowing down.",
   ytForbidden: "YouTube refused the request. Check the key's restrictions.",
   ytRejected: "YouTube rejected the request.",
-  ytChatGone: "That live chat no longer exists — the stream may have ended.",
+  ytChatGone: "Live chat has ended — stopped polling. Switch YouTube off and on for a new stream.",
   ytLostContact: "Lost contact with YouTube. Retrying…",
 
   // Adapter status — Kick
@@ -377,11 +377,11 @@ const es: Record<TranslationKey, string> = {
   ytUnreachable: "No se pudo conectar con YouTube.",
   ytReading: "Leyendo el chat en vivo",
   ytResumed: "Retomado desde donde quedó",
-  ytQuota: "Se agotó la cuota diaria de la API de YouTube. Se reinicia a medianoche del Pacífico.",
+  ytQuota: "Se agotó la cuota diaria de la API de YouTube: se detuvo la consulta. Se reinicia a medianoche del Pacífico.",
   ytRateLimited: "YouTube está limitando esta clave. Bajando la frecuencia.",
   ytForbidden: "YouTube rechazó el pedido. Revisá las restricciones de la clave.",
   ytRejected: "YouTube rechazó el pedido.",
-  ytChatGone: "Ese chat en vivo ya no existe: puede que la transmisión haya terminado.",
+  ytChatGone: "El chat en vivo terminó: se detuvo la consulta. Apagá y prendé YouTube para otra transmisión.",
   ytLostContact: "Se perdió la conexión con YouTube. Reintentando…",
 
   kickNeedChatroomId: "Agregá el ID del chatroom de Kick en Ajustes.",

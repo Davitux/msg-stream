@@ -207,14 +207,22 @@ export class YouTubeAdapter implements SourceAdapter<YouTubeSettings> {
 
       if (!res.ok) {
         onStatus(describeError(body, res.status));
-        // A rejected page token means the resume point is stale; drop it and
-        // start clean rather than retrying something YouTube won't accept.
-        if (res.status === 400 && this.pageToken) {
+
+        // A rejected page token means the resume point is stale. That is
+        // recoverable: drop it and start clean rather than retrying something
+        // YouTube will keep refusing.
+        const staleCursor = res.status === 400 && this.pageToken !== undefined;
+        if (staleCursor) {
           this.pageToken = undefined;
           this.onCursor(null);
+        } else if (isTerminal(body, res.status)) {
+          // Nothing to poll, or nothing polling can fix. Stopping matters:
+          // a finished stream retried every 15s is thousands of requests a day
+          // against a 10,000-unit budget, for messages that no longer exist.
+          return;
         }
-        // Back off hard on quota errors — retrying fast makes it strictly worse.
-        nextDelay = isQuotaError(body) ? 60_000 : 15_000;
+
+        nextDelay = 15_000;
       } else {
         this.pageToken = body.nextPageToken;
         this.onCursor({ videoId, liveChatId, pageToken: this.pageToken });
@@ -335,10 +343,27 @@ async function readJson<T>(res: Response): Promise<T> {
   }
 }
 
-function isQuotaError(body: unknown): boolean {
-  const reason = (body as { error?: { errors?: Array<{ reason?: string }> } })?.error?.errors?.[0]
-    ?.reason;
-  return reason === "quotaExceeded" || reason === "rateLimitExceeded";
+function errorReason(body: unknown): string | undefined {
+  return (body as { error?: { errors?: Array<{ reason?: string }> } })?.error?.errors?.[0]?.reason;
+}
+
+/**
+ * Whether polling should stop rather than retry.
+ *
+ * Retrying only helps when the next attempt could plausibly differ. A finished
+ * chat never comes back, an exhausted quota does not refill before midnight,
+ * and a key the API rejects will keep being rejected — so all three stop, and
+ * the status says why. Turning the source off and on again restarts it.
+ *
+ * Rate limiting is deliberately not terminal: that one does clear on its own.
+ */
+export function isTerminal(body: unknown, status: number): boolean {
+  const reason = errorReason(body);
+  if (reason === "rateLimitExceeded") return false;
+  if (reason === "quotaExceeded") return true;
+  // 404: the chat is gone. 403/400: refused credentials or a bad request,
+  // neither of which a retry changes.
+  return status === 404 || status === 403 || status === 400;
 }
 
 export function describeError(body: unknown, status: number): ConnectionStatus {

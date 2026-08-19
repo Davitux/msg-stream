@@ -1,5 +1,9 @@
 # msg-stream
 
+**Nothing to install — it runs at [msg-stream.linuxero.workers.dev](https://msg-stream.linuxero.workers.dev/).**
+Open it, add your channels in Settings, and that is the whole setup. Everything below is for
+running or changing it yourself.
+
 One inbox for live chat and tips across streaming platforms. Every message lands in a single
 feed showing **who sent it, what they said, and how much they gave** — in the platform's own
 currency — with a read toggle so you can clear them as you go.
@@ -248,9 +252,17 @@ channel; cheer and subscription events need you to be that channel's broadcaster
 create an API key, restrict it by HTTP referrer to your deployment, then paste it into Settings
 along with the live video's ID or URL.
 
-Use your *own* key rather than sharing one: the quota is 10,000 units per day **per key**, and
-each poll costs several units. The adapter honours the polling interval YouTube returns and backs
-off hard when quota runs out, but a shared key across several streamers would still empty quickly.
+Use your *own* key rather than sharing one: the quota is 10,000 units per day **per key**, and each
+poll costs several units, so a key shared between streamers empties fast.
+
+While a chat is live the adapter polls at whatever interval YouTube asks for — typically five
+seconds — and never faster than four. What matters more for the quota is when it *stops*: a
+finished chat, an exhausted quota and a rejected key all halt polling rather than retrying, because
+none of them can come good on the next attempt. Left retrying, a stream that ended hours ago would
+spend a whole day's quota on messages that no longer exist. Switching YouTube off and on starts it
+again for a new stream.
+
+Rate limiting is the exception and does keep retrying, since that one clears by itself.
 
 ## Deploying
 

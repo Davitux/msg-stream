@@ -25,6 +25,9 @@ const jsonResponse = (body: unknown, ok = true, status = 200) =>
 
 describe("YouTubeAdapter.connect", () => {
   let adapter: YouTubeAdapter;
+  /** A scheduled retry is the observable difference between stopping and not. */
+  const adapterIsPolling = () =>
+    (adapter as unknown as { timer: unknown }).timer !== null;
 
   beforeEach(() => {
     adapter = new YouTubeAdapter();
@@ -241,6 +244,75 @@ describe("YouTubeAdapter.connect", () => {
     const s = sinks();
     await adapter.connect({ video: "dQw4w9WgXcQ", apiKey: "k" }, s.onEvent, s.onStatus);
     await vi.waitFor(() => expect(s.last().detailKey).toBe("ytQuota"));
+  });
+
+  it.each([
+    ["a finished chat", 404, { error: { message: "no longer live" } }],
+    ["an exhausted quota", 403, { error: { errors: [{ reason: "quotaExceeded" }] } }],
+    ["a refused key", 400, { error: { message: "API key not valid" } }],
+  ])("stops polling on %s, rather than retrying forever", async (_label, status, body) => {
+    // A finished stream retried every 15s is thousands of requests a day
+    // against a 10,000-unit budget, for messages that no longer exist.
+    let chatCalls = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (String(input).includes("/videos")) {
+        return jsonResponse({ items: [{ liveStreamingDetails: { activeLiveChatId: "c" } }] });
+      }
+      chatCalls += 1;
+      return jsonResponse(body, false, status);
+    });
+
+    const s = sinks();
+    await adapter.connect({ video: "dQw4w9WgXcQ", apiKey: "k" }, s.onEvent, s.onStatus);
+    // Wait on the status, not the call count: connect reports "live" before
+    // the first poll, so counting the call can win the race against the error.
+    await vi.waitFor(() => expect(s.last().state).toBe("error"));
+
+    await new Promise((r) => setTimeout(r, 80));
+    expect(chatCalls).toBe(1);
+    expect(adapterIsPolling()).toBe(false);
+  });
+
+  it("keeps retrying rate limiting, which does clear on its own", async () => {
+    let chatCalls = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (String(input).includes("/videos")) {
+        return jsonResponse({ items: [{ liveStreamingDetails: { activeLiveChatId: "c" } }] });
+      }
+      chatCalls += 1;
+      return jsonResponse({ error: { errors: [{ reason: "rateLimitExceeded" }] } }, false, 403);
+    });
+
+    const s = sinks();
+    await adapter.connect({ video: "dQw4w9WgXcQ", apiKey: "k" }, s.onEvent, s.onStatus);
+    await vi.waitFor(() => expect(s.last().detailKey).toBe("ytRateLimited"));
+    expect(chatCalls).toBe(1);
+    // Scheduled again rather than given up on.
+    expect(adapterIsPolling()).toBe(true);
+  });
+
+  it("recovers from a stale cursor instead of stopping", async () => {
+    // A rejected page token is a 400, but unlike a bad key it is fixable —
+    // drop the cursor and carry on.
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (String(input).includes("/videos")) {
+        return jsonResponse({ items: [{ liveStreamingDetails: { activeLiveChatId: "c" } }] });
+      }
+      return jsonResponse({ error: { message: "Invalid page token" } }, false, 400);
+    });
+
+    const s = sinks();
+    const cursors: Array<unknown> = [];
+    await adapter.connect(
+      { video: "dQw4w9WgXcQ", apiKey: "k" },
+      s.onEvent,
+      s.onStatus,
+      (c) => cursors.push(c),
+      { videoId: "dQw4w9WgXcQ", liveChatId: "c", pageToken: "stale" },
+    );
+    await vi.waitFor(() => expect(cursors.length).toBeGreaterThan(0));
+    expect(cursors.at(-1)).toBeNull();
+    expect(adapterIsPolling()).toBe(true);
   });
 
   it("stops polling once disconnected", async () => {
