@@ -4,11 +4,15 @@ import { describe, expect, it } from "vitest";
 import {
   APPLE_SIZE,
   ICO_SIZES,
+  LOGO_SIZE,
+  RING_FILL,
+  RING_WIDTH,
   encodeIco,
   encodePng,
   parseRects,
   parseViewBox,
   rasterize,
+  ringedGround,
   squareGround,
 } from "@/scripts/generate-icons.mjs";
 
@@ -166,6 +170,11 @@ describe("the committed icons match the SVG", () => {
     expect(read("app/apple-icon.png").equals(expected)).toBe(true);
   });
 
+  it("docs/logo.png is too", () => {
+    const expected = encodePng(rasterize(ringedGround(rects), viewBox, LOGO_SIZE), LOGO_SIZE);
+    expect(read("docs/logo.png").equals(expected)).toBe(true);
+  });
+
   it("and the create-next-app default is gone", () => {
     // The scaffold ships a 25KB Vercel triangle; ours is a fraction of that.
     expect(read("app/favicon.ico").length).toBeLessThan(4096);
@@ -198,6 +207,26 @@ describe("favicon.ico is a valid icon file", () => {
   });
 });
 
+describe("the README header", () => {
+  const readme = read("README.md").toString("utf8");
+
+  it("shows the logo, at half the size it was drawn", () => {
+    // Drawn at 2x so it stays sharp on a retina screen; displaying it at its
+    // full width would make it twice as big as intended.
+    const tag = readme.match(/<img src="docs\/logo\.png"[^>]*>/);
+    expect(tag).not.toBeNull();
+    expect(tag![0]).toContain(`width="${LOGO_SIZE / 2}"`);
+  });
+
+  it("leaves it out of the accessibility tree, since the title says the name", () => {
+    expect(readme.match(/<img src="docs\/logo\.png"[^>]*>/)![0]).toContain('alt=""');
+  });
+
+  it("points at a file that exists", () => {
+    expect(read("docs/logo.png").length).toBeGreaterThan(0);
+  });
+});
+
 describe("apple-icon.png", () => {
   const png = read("app/apple-icon.png");
 
@@ -206,5 +235,54 @@ describe("apple-icon.png", () => {
     expect(png.readUInt32BE(16)).toBe(APPLE_SIZE);
     expect(png.readUInt32BE(20)).toBe(APPLE_SIZE);
     expect(png[25]).toBe(6); // colour type 6 = RGBA
+  });
+
+  it("is the square variant, not the rounded one", () => {
+    // The three rasters differ only in their ground, so a mix-up between them
+    // would be easy to ship and hard to spot.
+    const rects = parseRects(SVG);
+    const viewBox = parseViewBox(SVG);
+    expect(rasterize(rects, viewBox, APPLE_SIZE)[3]).toBe(0); // rounded: clear corner
+    expect(rasterize(squareGround(rects), viewBox, APPLE_SIZE)[3]).toBe(255);
+  });
+});
+
+describe("the hairline on the README logo", () => {
+  const rects = parseRects(SVG);
+  const viewBox = parseViewBox(SVG);
+
+  it("adds a ring behind the ground without touching the bars", () => {
+    const ringed = ringedGround(rects);
+    expect(ringed).toHaveLength(rects.length + 1);
+    expect(ringed[0].fill).toBe(RING_FILL);
+    expect(ringed.slice(2)).toEqual(rects.slice(1));
+  });
+
+  it("insets the ground so the ring shows only at the edge", () => {
+    const [ring, ground] = ringedGround(rects);
+    expect(ground.x).toBe(ring.x + RING_WIDTH);
+    expect(ground.w).toBe(ring.w - RING_WIDTH * 2);
+    expect(ground.r).toBe(ring.r - RING_WIDTH);
+  });
+
+  it("shows the app's border colour just inside the corner", () => {
+    // GitHub's dark theme is #0d1117 and our ink is #0e1013, close enough that
+    // an unringed badge dissolves into the page. Sample a point on the left
+    // edge, vertically centred, where the ring is the only thing drawn.
+    const pixels = rasterize(ringedGround(rects), viewBox, LOGO_SIZE);
+    const scale = LOGO_SIZE / viewBox;
+    const i = (Math.round(LOGO_SIZE / 2) * LOGO_SIZE + Math.round(RING_WIDTH * scale * 0.5)) * 4;
+    const hex = `#${[0, 1, 2].map((c) => pixels[i + c].toString(16).padStart(2, "0")).join("")}`;
+    expect(hex).toBe(RING_FILL);
+  });
+
+  it("stays off the favicon, where it would cost a pixel of the mark", () => {
+    const expected = encodeIco(
+      ICO_SIZES.map((size) => ({
+        size,
+        png: encodePng(rasterize(rects, viewBox, size), size),
+      })),
+    );
+    expect(read("app/favicon.ico").equals(expected)).toBe(true);
   });
 });

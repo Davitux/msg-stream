@@ -200,6 +200,13 @@ export function encodeIco(images) {
 export const ICO_SIZES = [16, 32, 48];
 /** Apple wants exactly this, and only this. */
 export const APPLE_SIZE = 180;
+/**
+ * The README header, at twice its display width so it stays sharp on a retina
+ * screen. A raster rather than the SVG because a README gets rendered by more
+ * than one thing — GitHub, npm, editors, mirrors — and not all of them agree
+ * about inline SVG.
+ */
+export const LOGO_SIZE = 144;
 
 /**
  * iOS masks the icon into its own squircle and composites it on an unknown
@@ -208,6 +215,37 @@ export const APPLE_SIZE = 180;
  */
 export function squareGround(rects) {
   return rects.map((rect, index) => (index === 0 ? { ...rect, r: 0 } : rect));
+}
+
+/** The hairline the README variant wears, and how thick it is in user units. */
+export const RING_FILL = "#2a2f3a";
+export const RING_WIDTH = 0.75;
+
+/**
+ * Draws the ground twice, the lower one slightly larger, so the mark gets a
+ * hairline edge.
+ *
+ * This exists for one specific background: GitHub's dark theme is #0d1117 and
+ * our ink is #0e1013, near enough that the badge dissolves into the page and
+ * leaves the bars apparently floating. The ring is the app's own border colour,
+ * so it stays invisible against a light page and separates the mark against a
+ * dark one. The favicon deliberately does not get this — at 16px the ring would
+ * cost a pixel of the mark and buy nothing.
+ */
+export function ringedGround(rects, width = RING_WIDTH, fill = RING_FILL) {
+  const [ground, ...bars] = rects;
+  return [
+    { ...ground, fill },
+    {
+      ...ground,
+      x: ground.x + width,
+      y: ground.y + width,
+      w: ground.w - width * 2,
+      h: ground.h - width * 2,
+      r: Math.max(0, ground.r - width),
+    },
+    ...bars,
+  ];
 }
 
 function main() {
@@ -227,8 +265,12 @@ function main() {
   );
   writeFileSync(join(ROOT, "app/apple-icon.png"), apple);
 
-  console.log(`favicon.ico   ${ICO_SIZES.join("/")}px  ${ico.length} bytes`);
-  console.log(`apple-icon.png ${APPLE_SIZE}px        ${apple.length} bytes`);
+  const logo = encodePng(rasterize(ringedGround(rects), viewBox, LOGO_SIZE), LOGO_SIZE);
+  writeFileSync(join(ROOT, "docs/logo.png"), logo);
+
+  console.log(`app/favicon.ico    ${ICO_SIZES.join("/")}px  ${ico.length} bytes`);
+  console.log(`app/apple-icon.png ${APPLE_SIZE}px      ${apple.length} bytes`);
+  console.log(`docs/logo.png      ${LOGO_SIZE}px      ${logo.length} bytes`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) main();

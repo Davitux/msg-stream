@@ -1,3 +1,5 @@
+<img src="docs/logo.png" width="72" alt="">
+
 # msg-stream
 
 **Nothing to install — it runs at [msg-stream.linuxero.workers.dev](https://msg-stream.linuxero.workers.dev/).**
@@ -105,7 +107,7 @@ and switch it on in the channel strip.
 | `tests/theme.test.ts` | Theme resolution and the pre-paint boot script, including a corrupt-storage fallback. |
 | `tests/connections.test.ts` | When a platform reconnects and when it must not. |
 | `tests/ui.test.tsx` | Rendering and interaction for the feed, status strip and settings drawer. |
-| `tests/favicon.test.ts` | The icon: that the SVG parses as XML, that its colours are still the ones in `globals.css`, and that the committed `.ico` and `.png` are what the generator produces from it today. |
+| `tests/favicon.test.ts` | The icon: that the SVG parses as XML, that its colours are still the ones in `globals.css`, and that every committed raster — `favicon.ico`, `apple-icon.png`, `docs/logo.png` — is what the generator produces from it today. |
 
 Adapter payload mapping is deliberately split into pure functions
 (`twitchNotificationToEvent`, `kickEventToStreamEvent`) so the shapes can be tested without
@@ -250,14 +252,22 @@ in `app/globals.css`, and the tests fail if the two drift apart.
 `app/icon.svg` is the source of truth. The raster forms are generated from it:
 
 ```bash
-node scripts/generate-icons.mjs   # rewrites app/favicon.ico and app/apple-icon.png
+node scripts/generate-icons.mjs   # rewrites favicon.ico, apple-icon.png and docs/logo.png
 ```
 
 Run that after editing the SVG and commit the results. It has no dependencies — the mark is four
 rounded rectangles, which is little enough geometry to rasterize directly, so no image library or
-headless browser is needed. `tests/favicon.test.ts` regenerates both files in memory and compares
-them to what is committed, so forgetting to run it fails the suite rather than shipping a stale
-icon.
+headless browser is needed. `tests/favicon.test.ts` regenerates all three files in memory and
+compares them to what is committed, so forgetting to run it fails the suite rather than shipping a
+stale icon.
+
+`docs/logo.png` is the one at the top of this file, drawn at twice its display width so it stays
+sharp on a retina screen. It is a raster rather than the SVG because a README gets rendered by more
+than one thing — GitHub, npm, editors, mirrors — and not all of them agree about inline SVG. It is
+also the one variant that wears a hairline border: GitHub's dark theme is `#0d1117` and our ink is
+`#0e1013`, near enough that without it the badge dissolves into the page and leaves the bars
+apparently floating. The favicon does not get that ring, because at 16px it would cost a pixel of
+the mark and buy nothing.
 
 Two details that are deliberate rather than oversights. The mark carries its own dark ground
 instead of being transparent, because a favicon sits on browser chrome we don't control and has to
@@ -385,7 +395,7 @@ administer — and equally, your own history does not follow you between devices
 ```
 app/
   page.tsx                    the only page — everything runs client-side
-  icon.svg                    the mark; favicon.ico and apple-icon.png are generated from it
+  icon.svg                    the mark; every raster icon is generated from it
 lib/
   types.ts                    StreamEvent + SourceAdapter — the contracts everything meets
   store.ts                    Zustand store, profiles, filtering
