@@ -18,9 +18,9 @@ jobs:
     name: Lint, typecheck, test, build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -28,6 +28,12 @@ jobs:
       - run: npm ci
 
       - run: npm run lint
+
+      # Next generates route and layout types into .next/types, and tsc needs
+      # them — without this, `LayoutProps` and friends are simply undefined and
+      # the typecheck fails on code that is perfectly correct. It passes locally
+      # only because a previous build left .next/ behind.
+      - run: npx next typegen
 
       # `next build` typechecks too, but running it alone here means a type
       # error is reported as a type error rather than as a failed build.
@@ -39,31 +45,40 @@ jobs:
       # surfacing for the first time during a deploy.
       - run: npm run build
 
-  deploy:
-    name: Deploy to Cloudflare
-    # The whole point of this workflow: nothing ships unless the checks passed.
-    needs: check
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - run: npm ci
-
-      # Rebuilt rather than carried over from the check job: the build takes
-      # seconds, and passing artifacts between jobs is more moving parts than
-      # it saves.
-      - run: npm run build
-
-      # No wranglerVersion given, so the action uses the version pinned in
-      # package.json — deploys and local runs stay on the same wrangler.
-      - uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          packageManager: npm
+  # ------------------------------------------------------------------
+  # Deploying from here is disabled: Cloudflare's own Git integration does
+  # it instead. Kept rather than deleted, because turning it back on is the
+  # way to make a deploy wait for the checks below — Cloudflare deploys on
+  # push whether or not they passed.
+  #
+  # To re-enable: uncomment, and add CLOUDFLARE_API_TOKEN and
+  # CLOUDFLARE_ACCOUNT_ID as repository secrets.
+  # ------------------------------------------------------------------
+#   deploy:
+#     name: Deploy to Cloudflare
+#     # The whole point of this workflow: nothing ships unless the checks passed.
+#     needs: check
+#     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v7
+#
+#       - uses: actions/setup-node@v7
+#         with:
+#           node-version: 22
+#           cache: npm
+#
+#       - run: npm ci
+#
+#       # Rebuilt rather than carried over from the check job: the build takes
+#       # seconds, and passing artifacts between jobs is more moving parts than
+#       # it saves.
+#       - run: npm run build
+#
+#       # No wranglerVersion given, so the action uses the version pinned in
+#       # package.json — deploys and local runs stay on the same wrangler.
+#       - uses: cloudflare/wrangler-action@v4
+#         with:
+#           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+#           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+#           packageManager: npm

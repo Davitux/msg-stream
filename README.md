@@ -280,22 +280,28 @@ npm run deploy:dry     # build and validate, uploading nothing
 npm run deploy         # build and publish, by hand
 ```
 
-### Deploys run from CI
+### Deploys come from Cloudflare, checks come from CI
 
-`.github/workflows/ci.yml` lints, typechecks, tests and builds on every push and pull request, and
-**deploys only from `main`, only after those pass**. That gating is the point: Cloudflare's own Git
-integration would deploy on push without running a single test, so a commit that broke all 460 of
-them would ship happily.
+Connect the repo in the Cloudflare dashboard: build command `npm run build`, output directory
+`out`, deploy command `npx wrangler deploy`. Cloudflare then builds and deploys on every push to
+`main`. **No environment variables** — every credential is entered in the browser and stays there.
 
-Two repository secrets are needed, under Settings → Secrets and variables → Actions:
+`.github/workflows/ci.yml` separately lints, typechecks, tests and builds on every push and pull
+request. Worth knowing what that does and does not buy you: **Cloudflare deploys whether or not
+those checks passed.** A commit that broke every test would still ship; CI would simply go red
+next to it.
 
-| Secret | Where it comes from |
-|---|---|
-| `CLOUDFLARE_API_TOKEN` | Cloudflare → My Profile → API Tokens → **Edit Cloudflare Workers** template |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare dashboard → Workers & Pages, in the right-hand sidebar |
+Two ways to close that gap, if it matters:
 
-Use the **Edit Cloudflare Workers** template rather than a broader token: it grants write access to
-Workers and nothing else. A read-only token fails, because deploying writes.
+- Make Cloudflare run the tests, by setting its build command to
+  `npm ci && npm test && npm run build`. A failing test then fails the build, and nothing deploys.
+- Or protect `main` in GitHub so changes arrive by pull request and cannot merge until the checks
+  pass. The deploy still happens on merge, but only tested code reaches `main`.
+
+The workflow also keeps a **commented-out deploy job**. Uncommenting it, and adding
+`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` as repository secrets, moves deployment into CI
+where it waits on the checks by construction. If you do that, disconnect the Cloudflare Git
+integration first — otherwise both deploy and race each other.
 
 `.github/dependabot.yml` proposes dependency updates weekly, grouped so a quiet week is one or two
 pull requests rather than a dozen: Next and React move together in one group because a Next major
@@ -304,23 +310,7 @@ outside the Next group are left ungrouped deliberately — those are the ones wo
 own. The actions used by the workflow above are updated too.
 
 Every one of those pull requests runs the full checks, which is what makes accepting them a
-judgement rather than a gamble. They deploy nothing: the deploy job only runs on a push to `main`,
-so Dependabot never reaches Cloudflare — and it could not anyway, since pull requests from it are
-denied access to repository secrets.
-
-**Do not also connect the repo in the Cloudflare dashboard.** You would get two deployment paths
-racing each other, and the dashboard one skips the tests — which is exactly what this workflow
-exists to prevent.
-
-**No environment variables** — every credential is entered in the browser and stays there. The two
-secrets above are for deploying, not for the app.
-
-The free URL is `msg-stream.<your-subdomain>.workers.dev`. Cloudflare notes that `workers.dev` is
-meant for personal and hobby use; that is advice about production robustness rather than a licence
-restriction, and a custom domain resolves it whenever you want one.
-
-Free-tier limits, none of which this app can realistically reach: static asset requests and
-bandwidth are unlimited, with 500 builds a month.
+judgement rather than a gamble.
 
 ### HTTPS is required, not optional
 
