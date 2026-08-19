@@ -1,0 +1,70 @@
+version: 2
+
+updates:
+  # ----------------------------------------------------------------------
+  # Application dependencies
+  # ----------------------------------------------------------------------
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Argentina/Buenos_Aires
+    # Grouped so a quiet week is one or two pull requests rather than a dozen.
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    commit-message:
+      prefix: deps
+      prefix-development: deps-dev
+      include: scope
+    groups:
+      # These have to move together — a Next major expects a matching React,
+      # and its lint config is versioned in lockstep. Splitting them produces
+      # pull requests that cannot pass on their own.
+      next:
+        patterns:
+          - next
+          - eslint-config-next
+          - react
+          - react-dom
+          - "@types/react"
+          - "@types/react-dom"
+
+      # Everything the app actually ships. Kept apart from tooling so a
+      # failing check here means something a user would notice.
+      production:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+
+      # Tooling: test runner, linters, wrangler. Noisy and low-risk, so it all
+      # arrives in one pull request.
+      tooling:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+
+    # Majors outside the `next` group are left ungrouped on purpose: they get
+    # their own pull request, because they are the ones worth reading.
+
+  # ----------------------------------------------------------------------
+  # The workflow's own actions
+  # ----------------------------------------------------------------------
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+      - github-actions
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        patterns:
+          - "*"

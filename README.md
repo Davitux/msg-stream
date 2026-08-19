@@ -260,52 +260,88 @@ npm run build
 npm run start          # serves out/ locally, exactly as a host would
 ```
 
-### Host settings
+### Hosted on Cloudflare Workers
 
-| | Build command | Output directory |
-|---|---|---|
-| **Vercel** | auto-detected | auto-detected — if you get a 404, set it to `out` |
-| **Cloudflare Pages** | `npm run build` | `out` |
-| **Netlify** | `npm run build` | `out` |
-| **GitHub Pages** | `npm run build` | `out` — see the caveat below |
+Chosen over the alternatives for one reason that outlives the technical comparison: **Cloudflare's
+free plan permits commercial use**. Vercel's Hobby plan and GitHub Pages both restrict
+primarily-commercial use, so adding a paid feature later would force a migration or an upgrade
+under time pressure. This avoids that.
 
-Needs Node 20 or newer, which every one of these defaults to. **No environment variables**: every
-credential is entered in the browser and stays there, so there is nothing to configure on the host.
+Workers rather than Pages because Cloudflare recommends it for new projects as of 2026, and
+because a Worker that serves only assets today can grow a `fetch` handler tomorrow — so if this
+ever does need a backend, it is a config change rather than a re-platform. Pages remains supported
+and would work equally well for a purely static site.
 
-Any of them is fine. Cloudflare Pages and Netlify are marginally the better fit only because
-Vercel's Next.js builder does more than a static export needs; none of that matters in practice.
+`wrangler.jsonc` holds the whole configuration. Note the absent `main`: there is no Worker script,
+only assets.
+
+```bash
+npm run deploy:dry     # build and validate, uploading nothing
+npm run deploy         # build and publish, by hand
+```
+
+### Deploys run from CI
+
+`.github/workflows/ci.yml` lints, typechecks, tests and builds on every push and pull request, and
+**deploys only from `main`, only after those pass**. That gating is the point: Cloudflare's own Git
+integration would deploy on push without running a single test, so a commit that broke all 460 of
+them would ship happily.
+
+Two repository secrets are needed, under Settings → Secrets and variables → Actions:
+
+| Secret | Where it comes from |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | Cloudflare → My Profile → API Tokens → **Edit Cloudflare Workers** template |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare dashboard → Workers & Pages, in the right-hand sidebar |
+
+Use the **Edit Cloudflare Workers** template rather than a broader token: it grants write access to
+Workers and nothing else. A read-only token fails, because deploying writes.
+
+`.github/dependabot.yml` proposes dependency updates weekly, grouped so a quiet week is one or two
+pull requests rather than a dozen: Next and React move together in one group because a Next major
+expects a matching React, production dependencies in another, and tooling in a third. Majors
+outside the Next group are left ungrouped deliberately — those are the ones worth reading on their
+own. The actions used by the workflow above are updated too.
+
+Every one of those pull requests runs the full checks, which is what makes accepting them a
+judgement rather than a gamble. They deploy nothing: the deploy job only runs on a push to `main`,
+so Dependabot never reaches Cloudflare — and it could not anyway, since pull requests from it are
+denied access to repository secrets.
+
+**Do not also connect the repo in the Cloudflare dashboard.** You would get two deployment paths
+racing each other, and the dashboard one skips the tests — which is exactly what this workflow
+exists to prevent.
+
+**No environment variables** — every credential is entered in the browser and stays there. The two
+secrets above are for deploying, not for the app.
+
+The free URL is `msg-stream.<your-subdomain>.workers.dev`. Cloudflare notes that `workers.dev` is
+meant for personal and hobby use; that is advice about production robustness rather than a licence
+restriction, and a custom domain resolves it whenever you want one.
+
+Free-tier limits, none of which this app can realistically reach: static asset requests and
+bandwidth are unlimited, with 500 builds a month.
 
 ### HTTPS is required, not optional
 
 Twitch refuses OAuth redirect URLs that aren't HTTPS (except `localhost`), and IndexedDB and
-`navigator.storage.persist()` both need a secure context. Every host above gives HTTPS free, so
-this only bites if you self-host over plain HTTP.
+`navigator.storage.persist()` both need a secure context. Cloudflare gives HTTPS free, so this
+only bites if you self-host over plain HTTP.
 
 ### After the first deploy
 
 1. **Add the deployed URL to your Twitch app** at
    [dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps) as an OAuth redirect URL —
-   `https://your-domain/` **with the trailing slash**, since Twitch matches it exactly.
+   `https://your-worker-url/` **with the trailing slash**, since Twitch matches it exactly.
 2. **Add the domain to your YouTube API key's** HTTP-referrer restrictions, or sign-in will work
    and YouTube will 403.
 
 ### The preview-deployment trap
 
-Vercel and Netlify give every branch and pull request its own generated URL. Twitch matches
-redirect URLs exactly, so **Twitch sign-in fails on preview deployments** unless each URL is
-registered — which is impractical, as they change per commit.
-
-Use a stable production domain for anything involving Twitch, and treat previews as good for
-everything else. The other sources are unaffected: they take pasted tokens rather than a redirect.
-
-### GitHub Pages, if you go that way
-
-Two extra steps, both because of how Pages serves files:
-
-- Serving from `https://user.github.io/msg-stream/` rather than a domain root needs `basePath` and
-  `assetPrefix` set to `/msg-stream` in `next.config.ts`, or every asset 404s.
-- Add an empty `.nojekyll` file to `out/`, or Jekyll silently drops the `_next/` directory because
-  its name starts with an underscore.
+Preview and branch deployments get generated URLs. Twitch matches redirect URLs exactly, so
+**Twitch sign-in fails on any preview** unless that exact URL is registered — impractical when it
+changes per commit. Use the production URL for anything involving Twitch. The other sources are
+unaffected: they take pasted tokens rather than a redirect.
 
 ### What deploying does not change
 
