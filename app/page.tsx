@@ -7,7 +7,7 @@ import { SettingsDrawer } from "@/components/SettingsDrawer";
 import { countUnread, selectActiveProfile, selectVisibleEvents, useStore } from "@/lib/store";
 import { useConnections } from "@/lib/useConnections";
 import { useTheme } from "@/lib/useTheme";
-import { useT } from "@/lib/useT";
+import { useLocale, useT } from "@/lib/useT";
 import type { Platform } from "@/lib/types";
 
 export default function Page() {
@@ -18,7 +18,6 @@ export default function Page() {
   const readIds = useStore((s) => s.readIds);
   const statuses = useStore((s) => s.statuses);
   const filters = useStore((s) => s.filters);
-  const locale = useStore((s) => s.app.locale);
   const capture = useStore((s) => s.app.capture);
   const platformDisplay = useStore((s) => s.app.platformDisplay);
   const bandBackground = useStore((s) => s.app.bandBackground);
@@ -33,6 +32,7 @@ export default function Page() {
 
   useConnections();
   useTheme();
+  const locale = useLocale();
   const t = useT();
 
   // Taking in paid only means paid only — including chat already in history

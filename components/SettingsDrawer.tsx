@@ -9,12 +9,12 @@ import { beginTwitchLogin } from "@/lib/adapters/twitch";
 import { statusDetail } from "./StatusBar";
 import { SecretInput } from "./SecretInput";
 import {
-  LOCALES,
+  LOCALE_PREFERENCES,
   PLATFORM_LABELS,
   THEMES,
   type CaptureMode,
   type ConnectionStatus,
-  type Locale,
+  type LocalePreference,
   type Platform,
   type PlatformDisplay,
   type Theme,
@@ -267,10 +267,13 @@ export function SettingsDrawer({ open, onClose, statuses }: Props) {
           <div className="panel-head">
             <h3 className="panel-title">{t("appearance")}</h3>
           </div>
-          <Segment<Locale>
+          <Segment<LocalePreference>
             label={t("language")}
             value={app.locale}
-            options={LOCALES.map((l) => ({ value: l, label: LOCALE_LABELS[l] }))}
+            options={LOCALE_PREFERENCES.map((l) => ({
+              value: l,
+              label: l === "system" ? t("localeSystem") : LOCALE_LABELS[l],
+            }))}
             onChange={setLocale}
           />
           <Segment<Theme>

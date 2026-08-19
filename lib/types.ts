@@ -13,8 +13,16 @@ export type Platform = (typeof PLATFORMS)[number];
 
 export type EventKind = "chat" | "tip" | "subscription" | "system";
 
+/** The languages the interface is actually written in. */
 export const LOCALES = ["en", "es"] as const;
 export type Locale = (typeof LOCALES)[number];
+
+/**
+ * What the user picked. "system" follows the browser and keeps following it,
+ * the same way the theme setting follows the OS.
+ */
+export const LOCALE_PREFERENCES = ["system", ...LOCALES] as const;
+export type LocalePreference = (typeof LOCALE_PREFERENCES)[number];
 
 /**
  * What the app takes in. "paid" drops ordinary chat at the door — it is never
@@ -230,7 +238,7 @@ export interface Profile {
 }
 
 export interface AppSettings {
-  locale: Locale;
+  locale: LocalePreference;
   theme: Theme;
   /**
    * A property of the deployment's Twitch app registration rather than of any

@@ -224,7 +224,10 @@ Twitch sign-in, is per profile — so profiles can point at different Twitch acc
 
 ## Language and theme
 
-English and Spanish, switched under Settings → Appearance. Adapters report their status as
+English and Spanish, switched under Settings → Appearance. The default is **System**, which follows
+the browser and keeps following it — matching on the primary subtag, so `es-AR`, `es-419` and `es`
+all land on Spanish rather than falling back to English on a technicality. Choosing a language
+explicitly overrides that for good. Adapters report their status as
 translation keys rather than sentences, so connection messages follow the chosen language too;
 text that comes back from a platform's own API is passed through untranslated, since we can't
 translate it and shouldn't invent it.

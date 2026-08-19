@@ -1,5 +1,13 @@
-import { describe, expect, it } from "vitest";
-import { LOCALE_LABELS, dictionaries, makeTranslator, translate } from "@/lib/i18n";
+import { describe, expect, it, vi } from "vitest";
+import {
+  LOCALE_LABELS,
+  detectLocale,
+  dictionaries,
+  makeTranslator,
+  resolveLocale,
+  translate,
+} from "@/lib/i18n";
+import { DEFAULT_APP } from "@/lib/store";
 import { LOCALES } from "@/lib/types";
 
 describe("dictionaries", () => {
@@ -82,5 +90,53 @@ describe("translate", () => {
     const t = makeTranslator("es");
     expect(t("done")).toBe("Listo");
     expect(t("switchProfile", { name: "Segundo" })).toBe("Cambiar a Segundo");
+  });
+});
+
+describe("following the browser's language", () => {
+  it("picks a supported language from the browser's order", () => {
+    expect(detectLocale(["es", "en"])).toBe("es");
+    expect(detectLocale(["en", "es"])).toBe("en");
+  });
+
+  it("matches on the primary subtag, so regional Spanish still counts", () => {
+    // An Argentine browser sends es-AR; falling back to English on that
+    // technicality would be the whole feature failing for its main audience.
+    for (const tag of ["es-AR", "es-419", "es-ES", "ES-ar"]) {
+      expect(detectLocale([tag]), tag).toBe("es");
+    }
+  });
+
+  it("skips languages the interface does not have", () => {
+    expect(detectLocale(["pt-BR", "fr", "es-AR"])).toBe("es");
+  });
+
+  it("falls back to English when nothing matches", () => {
+    expect(detectLocale(["ja", "ko"])).toBe("en");
+    expect(detectLocale([])).toBe("en");
+  });
+
+  it("passes an explicit choice straight through", () => {
+    expect(resolveLocale("es")).toBe("es");
+    expect(resolveLocale("en")).toBe("en");
+  });
+
+  it("resolves 'system' against the browser", () => {
+    vi.stubGlobal("navigator", { languages: ["es-AR", "en"] });
+    expect(resolveLocale("system")).toBe("es");
+
+    vi.stubGlobal("navigator", { languages: ["fr"] });
+    expect(resolveLocale("system")).toBe("en");
+    vi.unstubAllGlobals();
+  });
+
+  it("falls back to `language` when `languages` is absent", () => {
+    vi.stubGlobal("navigator", { language: "es-ES" });
+    expect(resolveLocale("system")).toBe("es");
+    vi.unstubAllGlobals();
+  });
+
+  it("ships following the browser", () => {
+    expect(DEFAULT_APP.locale).toBe("system");
   });
 });

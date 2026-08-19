@@ -10,7 +10,7 @@ import {
   type CaptureMode,
   type ConnectionStatus,
   type PlatformDisplay,
-  type Locale,
+  type LocalePreference,
   type Platform,
   type Cursor,
   type Profile,
@@ -40,7 +40,8 @@ export interface Filters {
 }
 
 export const DEFAULT_APP: AppSettings = {
-  locale: "en",
+  // Follows the browser until the user says otherwise.
+  locale: "system",
   theme: "system",
   twitchClientId: "",
   capture: "paid",
@@ -106,7 +107,7 @@ interface StoreState {
   setHydrated: () => void;
   setHistoryReady: () => void;
 
-  setLocale: (locale: Locale) => void;
+  setLocale: (locale: LocalePreference) => void;
   setTheme: (theme: Theme) => void;
   setTwitchClientId: (clientId: string) => void;
   setCapture: (mode: CaptureMode) => void;
@@ -440,7 +441,7 @@ export const useStore = create<StoreState>()(
     }),
     {
       name: STORAGE_KEY,
-      version: 3,
+      version: 4,
       storage: createJSONStorage(() => localStorage),
       // Rehydrate on demand rather than at import time, so the client's first
       // render matches the prerendered HTML.
@@ -484,6 +485,16 @@ export const useStore = create<StoreState>()(
         // v1 kept saved tips and read marks in localStorage. Both moved to
         // IndexedDB; `importLegacyMessages` rescues the old rows before this
         // blob is rewritten without them.
+        // v4 made the language follow the browser by default. Anyone from
+        // before it has a stored language, so the new default would never
+        // reach them — but only "en" is worth overriding, since that was the
+        // old default and nobody arrives at it by accident. A stored "es" was
+        // a deliberate choice and is left alone.
+        if (version < 4 && old.app && typeof old.app === "object") {
+          const app = old.app as Record<string, unknown>;
+          if (app.locale === "en") app.locale = "system";
+        }
+
         // v3 dropped the synthetic "mock" source. Strip it from stored profiles
         // so a leftover `enabled.mock: true` can't make the app think a source
         // is on when none is.

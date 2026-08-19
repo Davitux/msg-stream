@@ -1,4 +1,4 @@
-import type { Locale } from "./types";
+import { LOCALES, type Locale, type LocalePreference } from "./types";
 
 export type TranslationVars = Record<string, string | number>;
 
@@ -16,6 +16,7 @@ const en = {
   done: "Done",
   closeSettings: "Close settings",
   loading: "Loading",
+  localeSystem: "System",
 
   // Counters and filters
   unread: "unread",
@@ -215,6 +216,7 @@ const es: Record<TranslationKey, string> = {
   done: "Listo",
   closeSettings: "Cerrar ajustes",
   loading: "Cargando",
+  localeSystem: "Sistema",
 
   unread: "sin leer",
   paid: "con dinero",
@@ -396,6 +398,30 @@ export const LOCALE_LABELS: Record<Locale, string> = {
   en: "English",
   es: "Español",
 };
+
+/**
+ * Picks the best supported language from a browser's ordered preferences.
+ *
+ * Matches on the primary subtag, so "es-AR", "es-419" and "es" all land on
+ * Spanish — a browser set to Argentine Spanish should not fall back to English
+ * on a technicality. Order is respected: the first supported entry wins.
+ */
+export function detectLocale(preferred: readonly string[] = []): Locale {
+  for (const tag of preferred) {
+    const primary = tag.toLowerCase().split("-")[0];
+    const match = LOCALES.find((locale) => locale === primary);
+    if (match) return match;
+  }
+  return "en";
+}
+
+/** Resolves a stored preference to a language the interface actually has. */
+export function resolveLocale(preference: LocalePreference): Locale {
+  if (preference !== "system") return preference;
+  if (typeof navigator === "undefined") return "en";
+  // `languages` is the ordered list; `language` is the single best guess.
+  return detectLocale(navigator.languages ?? [navigator.language]);
+}
 
 /**
  * Substitutes `{name}` placeholders. An unknown key returns the key itself,

@@ -455,6 +455,29 @@ describe("persistence", () => {
     expect(profiles).toHaveLength(1);
   });
 
+  it("hands an older blob the new follow-the-browser default", async () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ version: 3, state: { app: { locale: "en", theme: "dark" } } }),
+    );
+    await useStore.persist.rehydrate();
+
+    // "en" was the old default, not a choice, so it becomes "system".
+    expect(useStore.getState().app.locale).toBe("system");
+    // Everything else they did choose survives.
+    expect(useStore.getState().app.theme).toBe("dark");
+  });
+
+  it("leaves a deliberately chosen language alone", async () => {
+    // Nobody ends up on Spanish by accident, so that is a real preference.
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ version: 3, state: { app: { locale: "es" } } }),
+    );
+    await useStore.persist.rehydrate();
+    expect(useStore.getState().app.locale).toBe("es");
+  });
+
   it("falls back to a real profile when the stored active id is stale", async () => {
     localStorage.setItem(
       STORAGE_KEY,
